@@ -3,24 +3,18 @@ from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 
 load_dotenv()
 
 GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # inisialisasi Gemini client dan konfigurasi
-# MODEL = "gemini-2.0-flash"
-# client = genai.Client(api_key=GOOGLE_API_KEY)
-
-MODEL = "gemini-pro"
-
 genai.configure(api_key=GOOGLE_API_KEY)
-model = genai.GenerativeModel(MODEL)
 
 app = FastAPI(title="Intelligent Email Writer API")
 
+# schema request
 class EmailRequest(BaseModel):
     category: str
     recipient: str
@@ -31,7 +25,20 @@ class EmailRequest(BaseModel):
     points: List[str]
     example_email: Optional[str] = None
 
+# fungsi untuk membentuk prompt teks dari data input pengguna
 def build_prompt(body: EmailRequest) -> str:
+    """
+    menghasilkan prompt teks berdasarkan data yang diberikan oleh pengguna.
+
+    fungsi ini membangun struktur prompt yang berisi:
+    - Bahasa dan nada email.
+    - Informasi penerima dan subjek.
+    - Kategori dan tingkat urgensi.
+    - Poin-poin isi email yang harus disertakan.
+    - (Opsional) Contoh email sebelumnya sebagai referensi.
+
+    prompt ini akan digunakan sebagai input untuk LLM seperti Gemini.
+    """
     lines = [
         f"Tolong buatkan email dalam {body.language.lower()} yang {body.tone.lower()}",
         f"kepada {body.recipient}.",
@@ -49,15 +56,27 @@ def build_prompt(body: EmailRequest) -> str:
     lines.append("Buat email yang profesional, jelas, dan padat.")
     return "\n".join(lines)
 
+# endpoint untuk generate email   ### UNTUK KODE NYA BISA DIUBAH SESUAI KEBUTUHAN ###
 @app.post("/generate/")
 async def generate_email(req: EmailRequest):
     prompt = build_prompt(req)
-
+    
     try:
+        # Gunakan model dengan versi yang benar
+        model = genai.GenerativeModel("gemini-1.5-flash")  # Ubah nama model
         response = model.generate_content(prompt)
+        
+        # ambil hasil teks dari response
         generated = response.text
+        
         if not generated:
-            raise HTTPException(status_code=500, detail="Tidak ada hasil dari Gemini API")
+            raise ValueError("Tidak ada hasil yang dihasilkan oleh Gemini API")
+            
         return {"generated_email": generated}
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Debug - Error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error saat generate email: {str(e)}"
+        )
