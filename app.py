@@ -2,67 +2,105 @@ import requests
 import streamlit as st
 from typing import List
 
+API_URL = "http://localhost:8000/generate/"
 
+st.set_page_config(
+    page_title="Intelligent Email Writer", 
+    layout="centered"
+)
 
-st.set_page_config(page_title="Email Generator", page_icon="✉️")
-st.title("📨 Email Generator Otomatis dengan Gemini")
+st.title("📝 Intelligent Email Writer for Students")
 
-st.markdown("Masukkan detail email yang ingin kamu buat:")
+# 1. kategori email
+category = st.selectbox(
+    "Kategori Email",
+    [
+        "Akademik",
+        "Bimbingan & Skripsi",
+        "Magang / MBKM",
+        "Beasiswa / Exchange",
+        "Organisasi / Kepanitiaan",
+        "Karier & Profesional",
+        "Umum & Administratif"
+    ]
+)
 
-recipient = st.text_input("Nama Penerima")
-subject_options = [
-    "Permohonan Izin Tidak Hadir Kuliah",
-    "Permintaan Surat Rekomendasi",
-    "Pengajuan Tugas atau Proyek",
-    "Permohonan Revisi Nilai",
-    "Permintaan Jadwal Bimbingan",
-    "Undangan Acara Kampus",
-    "Permintaan Informasi Akademik",
-    "Pengajuan Beasiswa",
-    "Laporan Kegiatan Organisasi",
-    "Pengajuan Magang atau Penelitian",
-    "Lainnya"
-]
+# 2. penerima
+recipient = st.text_input(
+    "Kepada",
+    placeholder="e.g., Dosen Pembimbing, TU Fakultas, dst."
+)
 
-selected_subject = st.selectbox("Subjek Email", subject_options)
+# 3. subjek
+subject = st.text_input(
+    "Subjek Email",
+    placeholder="e.g., Permohonan Izin Tidak Hadir Kuliah"
+)
 
-if selected_subject == "Lainnya":
-    custom_subject = st.text_input("Tulis Subjek Email Anda")
-    subject = custom_subject
-else:
-    subject = selected_subject
-category = st.selectbox("Kategori Email", [
-    "Akademik",
-    "Administrasi",
-    "Organisasi Kemahasiswaan",
-    "Keuangan / Beasiswa",
-    "Magang & Penelitian",
-    "Acara Kampus",
-    "Layanan Umum / Fasilitas"
-])
-tone = st.selectbox("Status Email", ["Formal", "Santai", "Serius", "Friendly"])
-language = st.selectbox("Bahasa", ["Indonesia", "English"])
-urgency = st.radio("Tingkat Urgensi", ["Biasa", "Segera", "Sangat Mendesak"])
+# 4. tone penulisan
+tone = st.selectbox(
+    "Gaya/Tone Penulisan",
+    ["Formal dan Sopan", "Santai namun Sopan", "Netral"]
+)
 
-points = st.text_area("Isi Email").split("\n")
-example_email = st.text_area("Contoh email sebelumnya (opsional)")
+# 5. bahasa
+language = st.selectbox(
+    "Bahasa",
+    ["Bahasa Indonesia", "Bahasa Inggris"]
+)
 
-if st.button("Buat Email"):
-    payload = {
-        "category": category,
-        "recipient": recipient,
-        "subject": subject,
-        "tone": tone,
-        "language": language,
-        "urgency_level": urgency,
-        "points": [p.strip() for p in points if p.strip()],
-        "example_email": example_email or None
-    }
+# 6. tingkat urgensi (opsional)
+urgency = st.selectbox(
+    "Tingkat Urgensi",
+    ["Biasa", "Tinggi", "Rendah"]
+)
 
-    with st.spinner("Membuat email..."):
-        res = requests.post("http://localhost:8000/generate/", json=payload)
-        if res.status_code == 200:
-            st.success("Email berhasil dibuat:")
-            st.write(res.json()["generated_email"])
-        else:
-            st.error(f"Gagal: {res.json()['detail']}")
+# 7. poin-poin utama (pisah baris baru)
+points_input = st.text_area(
+    "Poin-poin Utama Isi Email",
+    placeholder="Tuliskan poin-poin penting, satu poin per baris"
+)
+# ubah menjadi list
+points = [p.strip() for p in points_input.split("\n") if p.strip()]
+
+# 8. contoh email sebelumnya (opsional)
+example = st.text_area(
+    "Contoh Email Sebelumnya (Opsional)",
+    height=100
+)
+
+# generate email
+if st.button("✉️ Buat Email"):
+    if not (recipient and subject and points):
+        st.error("Mohon isi paling tidak: Kepada, Subjek, dan Poin-poin isi email.")
+    else:
+        # susun payload
+        payload = {
+            "category": category,
+            "recipient": recipient,
+            "subject": subject,
+            "tone": tone,
+            "language": language,
+            "urgency_level": urgency,
+            "points": points,
+            "example_email": example
+        }
+
+        # kirim ke backend
+        try:
+            # kirim request ke API
+            response = requests.post(API_URL, json=payload, timeout=15)
+            
+            # cek status code
+            response.raise_for_status()
+            
+            # ambil data dari response
+            data = response.json()
+            
+            # tampilkan hasil
+            st.subheader("📄 Hasil Email")
+            st.markdown(data.get("generated_email", "– Tidak ada output –"))
+        except requests.exceptions.HTTPError as e:
+            st.error(f"Server Error {response.status_code}: {response.text}")
+        except requests.exceptions.RequestException as e:
+            st.error(f"Gagal menghubungi server: {e}")
